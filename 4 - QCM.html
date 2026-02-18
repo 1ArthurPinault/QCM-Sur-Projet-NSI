@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flash Cards — Générateur de QCM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ════════════════════════════════════
+     DESIGN SYSTEM — Thème "Terminal Épuré"
+     ════════════════════════════════════ */
+  :root {
+    --bg:        #0d0f1a;
+    --surface:   #141625;
+    --panel:     #1c1f35;
+    --border:    #2a2f52;
+    --accent:    #5c6ef8;
+    --accent2:   #a78bfa;
+    --green:     #34d399;
+    --orange:    #fb923c;
+    --red:       #f87171;
+    --yellow:    #fbbf24;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --code-bg:   #0a0c17;
+    --radius:    14px;
+    --radius-sm: 8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Bruit de fond subtil ─── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ─── Header ─── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,15,26,.92);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: breathe 2.4s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%,100% { opacity: .6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.3); }
+  }
+  .logo h1 { font-size: .95rem; font-weight: 700; letter-spacing: .04em; }
+  .logo span { color: var(--accent); }
+
+  /* ─── Progress bar ─── */
+  .progress-wrap {
+    display: flex; align-items: center; gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem; color: var(--muted);
+  }
+  .progress-bar {
+    width: 160px; height: 4px;
+    background: var(--border); border-radius: 99px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .5s ease;
+  }
+
+  /* ─── Tabs navigation ─── */
+  .nav-tabs {
+    display: flex; gap: 6px;
+    padding: 20px 32px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    font-family: 'Sora', sans-serif;
+    font-size: .8rem; font-weight: 500;
+    padding: 10px 18px;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all .2s; white-space: nowrap;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem; padding: 2px 6px;
+    background: var(--panel); border-radius: 99px;
+    color: var(--muted);
+  }
+
+  /* ─── Section container ─── */
+  .section { display: none; padding: 32px; max-width: 860px; margin: 0 auto; }
+  .section.active { display: block; }
+
+  .section-title {
+    font-size: 1.1rem; font-weight: 700;
+    color: var(--accent2); margin-bottom: 28px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+  }
+
+  /* ════════════════════════════
+     FLASH CARDS (flip)
+     ════════════════════════════ */
+  .cards-nav {
+    display: flex; align-items: center; justify-content: center;
+    gap: 20px; margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .cards-counter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .9rem; color: var(--muted); min-width: 60px; text-align: center;
+  }
+  .nav-btn {
+    font-family: 'Sora', sans-serif; font-size: .85rem; font-weight: 600;
+    padding: 10px 22px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); cursor: pointer;
+    background: var(--panel); color: var(--text);
+    transition: all .2s;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  .flip-hint {
+    text-align: center; font-size: .75rem; color: var(--muted);
+    margin-bottom: 20px; letter-spacing: .06em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .card-scene {
+    perspective: 1200px;
+    max-width: 700px; min-height: 320px;
+    margin: 0 auto;
+    cursor: pointer;
+  }
+  .card-inner {
+    position: relative; width: 100%; min-height: 320px;
+    transform-style: preserve-3d;
+    transition: transform .55s cubic-bezier(.4,0,.2,1);
+  }
+  .card-scene.flipped .card-inner { transform: rotateY(180deg); }
+
+  .card-face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: var(--radius);
+    padding: 36px 40px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .card-front {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 40px rgba(92,110,248,.08);
+  }
+  .card-back {
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    box-shadow: 0 4px 40px rgba(92,110,248,.15);
+    transform: rotateY(180deg);
+  }
+
+  .card-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--accent); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-tag::before {
+    content: ''; display: inline-block;
+    width: 20px; height: 1px; background: var(--accent);
+  }
+
+  .card-question {
+    font-size: 1.15rem; font-weight: 500; line-height: 1.65;
+    color: var(--text);
+  }
+  .card-answer {
+    font-size: .98rem; line-height: 1.7; color: #c4d1e8;
+  }
+  .card-answer code, .card-question code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .85em;
+    background: var(--code-bg);
+    color: var(--green);
+    padding: 2px 7px; border-radius: 5px;
+  }
+  .card-answer .highlight { color: var(--accent2); font-weight: 600; }
+  .card-answer ul { padding-left: 18px; margin-top: 10px; }
+  .card-answer li { margin-bottom: 6px; }
+
+  .flip-indicator {
+    position: absolute; bottom: 16px; right: 20px;
+    font-size: .7rem; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .category-pill {
+    display: inline-block;
+    font-size: .65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; padding: 3px 10px; border-radius: 99px;
+    margin-bottom: 16px;
+  }
+  .cat-python { background: rgba(251,191,36,.15); color: var(--yellow); }
+  .cat-js     { background: rgba(251,191,36,.12); color: #f0d060; }
+  .cat-html   { background: rgba(251,130,74,.15); color: var(--orange); }
+  .cat-css    { background: rgba(92,110,248,.2); color: var(--accent); }
+  .cat-archi  { background: rgba(167,139,250,.15); color: var(--accent2); }
+
+  /* ════════════════════════════
+     QCM
+     ════════════════════════════ */
+  .qcm-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 30px 34px;
+    margin-bottom: 24px;
+    transition: border-color .2s;
+  }
+  .qcm-question {
+    font-size: 1rem; font-weight: 600; margin-bottom: 20px;
+    line-height: 1.6;
+  }
+  .qcm-question code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .85em;
+    background: var(--code-bg); color: var(--green);
+    padding: 2px 7px; border-radius: 5px;
+  }
+  .qcm-options { display: flex; flex-direction: column; gap: 10px; }
+  .qcm-option {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    cursor: pointer; transition: all .18s;
+    font-size: .9rem; line-height: 1.5;
+    background: transparent; text-align: left;
+    color: var(--text); font-family: 'Sora', sans-serif;
+  }
+  .qcm-option:hover { border-color: var(--accent); background: rgba(92,110,248,.06); }
+  .qcm-option.selected { border-color: var(--accent2); background: rgba(167,139,250,.1); }
+  .qcm-option.correct  { border-color: var(--green); background: rgba(52,211,153,.1); color: var(--green); }
+  .qcm-option.wrong    { border-color: var(--red); background: rgba(248,113,113,.08); color: var(--red); }
+  .qcm-option .opt-letter {
+    font-family: 'JetBrains Mono', monospace; font-size: .75rem;
+    min-width: 22px; height: 22px;
+    border: 1px solid var(--border); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+    color: var(--muted);
+  }
+  .qcm-option.selected .opt-letter { border-color: var(--accent2); color: var(--accent2); }
+  .qcm-option.correct .opt-letter  { border-color: var(--green); color: var(--green); }
+  .qcm-option.wrong .opt-letter    { border-color: var(--red); color: var(--red); }
+  .qcm-option code {
+    font-family: 'JetBrains Mono', monospace; font-size: .82em;
+    background: var(--code-bg); color: var(--green); padding: 1px 5px; border-radius: 4px;
+  }
+
+  .qcm-feedback {
+    margin-top: 14px; padding: 12px 16px;
+    border-radius: var(--radius-sm); font-size: .875rem; line-height: 1.6;
+    display: none;
+  }
+  .qcm-feedback.show { display: block; }
+  .qcm-feedback.ok  { background: rgba(52,211,153,.1); border-left: 3px solid var(--green); color: #9de8ca; }
+  .qcm-feedback.ko  { background: rgba(248,113,113,.08); border-left: 3px solid var(--red); color: #f4a0a0; }
+  .qcm-feedback code { font-family:'JetBrains Mono',monospace; background:var(--code-bg); padding:1px 5px; border-radius:4px; color:var(--green); }
+
+  .qcm-actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .btn-check {
+    font-family: 'Sora', sans-serif; font-size: .82rem; font-weight: 600;
+    padding: 9px 20px; border-radius: var(--radius-sm);
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+    transition: opacity .2s;
+  }
+  .btn-check:hover { opacity: .85; }
+  .btn-check:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-reset-qcm {
+    font-family: 'Sora', sans-serif; font-size: .82rem; font-weight: 500;
+    padding: 9px 20px; border-radius: var(--radius-sm);
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border); cursor: pointer; transition: all .2s;
+  }
+  .btn-reset-qcm:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ════════════════════════════
+     FILL-IN-THE-BLANK
+     ════════════════════════════ */
+  .fill-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 30px 34px; margin-bottom: 24px;
+  }
+  .fill-statement {
+    font-size: .98rem; line-height: 1.9; margin-bottom: 20px; color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .fill-statement .blank-word {
+    display: inline-block; min-width: 120px; height: 26px;
+    border-bottom: 2px solid var(--accent);
+    background: rgba(92,110,248,.07);
+    border-radius: 3px 3px 0 0;
+    vertical-align: bottom;
+    font-style: italic; color: var(--muted);
+    padding: 0 6px; font-size: .88rem;
+    cursor: text; outline: none;
+    font-family: 'JetBrains Mono', monospace;
+    transition: border-color .2s, background .2s;
+  }
+  .fill-statement .blank-word:focus {
+    border-color: var(--accent2); background: rgba(167,139,250,.1);
+    color: var(--text);
+  }
+  .fill-statement .blank-word.correct-blank {
+    border-color: var(--green); background: rgba(52,211,153,.1); color: var(--green);
+  }
+  .fill-statement .blank-word.wrong-blank {
+    border-color: var(--red); background: rgba(248,113,113,.08); color: var(--red);
+  }
+  .fill-context {
+    font-size: .8rem; color: var(--muted); margin-bottom: 18px;
+    font-family: 'Sora', sans-serif;
+  }
+  .fill-context code { font-family:'JetBrains Mono',monospace; color: var(--green); font-size: .85em; }
+  .fill-result {
+    margin-top: 14px; font-size: .875rem; display: none;
+    padding: 12px 16px; border-radius: var(--radius-sm); line-height: 1.6;
+  }
+  .fill-result.show { display: block; }
+  .fill-result.ok { background: rgba(52,211,153,.1); border-left: 3px solid var(--green); color: #9de8ca; }
+  .fill-result.ko { background: rgba(248,113,113,.08); border-left: 3px solid var(--red); color: #f4a0a0; }
+  .fill-result code { font-family:'JetBrains Mono',monospace; background:var(--code-bg); padding:1px 5px; border-radius:4px; color:var(--green); }
+
+  /* ════════════════════════════
+     VRAI / FAUX
+     ════════════════════════════ */
+  .vf-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 26px 32px; margin-bottom: 20px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .vf-statement { font-size: .98rem; line-height: 1.65; }
+  .vf-statement code { font-family:'JetBrains Mono',monospace; background:var(--code-bg); color:var(--green); padding:2px 6px; border-radius:4px; font-size:.85em; }
+  .vf-btns { display: flex; gap: 10px; }
+  .vf-btn {
+    font-family: 'Sora', sans-serif; font-size: .82rem; font-weight: 700;
+    padding: 10px 28px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); cursor: pointer;
+    background: transparent; color: var(--text); transition: all .18s;
+    letter-spacing: .04em;
+  }
+  .vf-btn[data-val="true"]:hover  { border-color: var(--green); color: var(--green); background: rgba(52,211,153,.07); }
+  .vf-btn[data-val="false"]:hover { border-color: var(--red); color: var(--red); background: rgba(248,113,113,.07); }
+  .vf-btn.correct { border-color: var(--green); background: rgba(52,211,153,.12); color: var(--green); }
+  .vf-btn.wrong   { border-color: var(--red); background: rgba(248,113,113,.1); color: var(--red); }
+  .vf-btn:disabled { cursor: default; }
+  .vf-expl {
+    font-size: .85rem; line-height: 1.6; display: none;
+    padding: 10px 14px; border-radius: var(--radius-sm);
+    background: var(--panel);
+  }
+  .vf-expl.show { display: block; }
+  .vf-expl code { font-family:'JetBrains Mono',monospace; background:var(--code-bg); color:var(--green); padding:1px 5px; border-radius:4px; font-size:.85em; }
+
+  /* ════════════════════════════
+     SCORE GLOBAL
+     ════════════════════════════ */
+  .score-panel {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: .75rem; color: var(--muted);
+  }
+  .score-num { color: var(--green); font-weight: 700; }
+
+  /* ─── Reset all btn ─── */
+  .btn-global-reset {
+    font-family: 'Sora', sans-serif; font-size: .8rem; font-weight: 600;
+    padding: 8px 18px; border-radius: var(--radius-sm);
+    background: rgba(248,113,113,.1); color: var(--red);
+    border: 1px solid rgba(248,113,113,.3); cursor: pointer; transition: all .2s;
+  }
+  .btn-global-reset:hover { background: rgba(248,113,113,.2); }
+
+  /* ─── Responsive / Mobile-first ─── */
+
+  /* Carte flip : hauteur min adaptée au contenu sur mobile */
+  @media (max-width: 480px) {
+    .card-scene { min-height: 260px; }
+    .card-inner { min-height: 260px; }
+    .card-face  { padding: 22px 18px; min-height: 260px; }
+    .card-question { font-size: 1rem; }
+    .card-answer   { font-size: .9rem; }
+
+    /* Header compact */
+    header { padding: 10px 14px; gap: 10px; }
+    .logo h1 { font-size: .82rem; }
+    .progress-bar { width: 100px; }
+    .progress-wrap { font-size: .7rem; }
+
+    /* Onglets défilables sans texte coupé */
+    .nav-tabs { padding: 12px 14px 0; gap: 4px; }
+    .tab-btn  { font-size: .72rem; padding: 8px 12px; }
+
+    /* Sections */
+    .section { padding: 16px 14px; }
+
+    /* Cards exercices */
+    .qcm-card, .fill-card, .vf-card { padding: 18px 14px; }
+    .qcm-question { font-size: .9rem; }
+    .qcm-option   { padding: 10px 12px; font-size: .85rem; }
+
+    /* Boutons navigation flash cards */
+    .cards-nav { gap: 10px; }
+    .nav-btn   { padding: 8px 14px; font-size: .78rem; }
+
+    /* Fill blanks */
+    .fill-statement { font-size: .88rem; }
+    .blank-word     { min-width: 90px; }
+
+    /* Vrai/faux */
+    .vf-btns  { flex-direction: column; gap: 8px; }
+    .vf-btn   { width: 100%; text-align: center; padding: 12px; }
+
+    /* Bouton reset global */
+    .btn-global-reset { font-size: .72rem; padding: 6px 12px; }
+
+    /* Flip hint */
+    .flip-hint { font-size: .68rem; }
+  }
+
+  @media (max-width: 600px) {
+    header { padding: 14px 18px; }
+    .nav-tabs { padding: 16px 18px 0; }
+    .section { padding: 20px 18px; }
+    .card-face { padding: 26px 24px; }
+    .qcm-card, .fill-card, .vf-card { padding: 22px 20px; }
+
+    /* Touch targets minimum 44px pour accessibilité mobile */
+    .nav-btn, .btn-check, .btn-reset-qcm, .vf-btn {
+      min-height: 44px;
+    }
+    .qcm-option { min-height: 44px; align-items: center; }
+
+    /* Désactivation des hover transform sur touch (évite le bug sticky hover) */
+    .qcm-option:hover  { transform: none; }
+
+    /* Progress bar plus large sur mobile */
+    .progress-bar { width: 120px; }
+
+    /* Section title plus compact */
+    .section-title { font-size: .95rem; margin-bottom: 20px; }
+  }
+
+  /* Empêche le débordement horizontal sur très petits écrans */
+  @media (max-width: 360px) {
+    .tab-btn { font-size: .66rem; padding: 6px 8px; }
+    .card-question { font-size: .92rem; }
+    .fill-statement { font-size: .82rem; line-height: 1.7; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <h1>Flash Cards &mdash; <span>Générateur QCM</span></h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div class="progress-wrap">
+      <span id="progress-label">0 / 0</span>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div class="score-panel">score : <span class="score-num" id="global-score">0</span></div>
+    <button class="btn-global-reset" onclick="resetAll()">↺ reset</button>
+  </div>
+</header>
+
+<!-- Navigation par onglets -->
+<div class="nav-tabs" id="nav-tabs">
+  <button class="tab-btn active" onclick="switchTab('flashcards',this)">
+    🃏 Flash Cards <span class="tab-badge" id="fc-badge">0</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('qcm',this)">
+    ❓ QCM <span class="tab-badge" id="qcm-badge">0</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('fill',this)">
+    ✏️ Trous à compléter <span class="tab-badge" id="fill-badge">0</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('vf',this)">
+    ✔️ Vrai / Faux <span class="tab-badge" id="vf-badge">0</span>
+  </button>
+</div>
+
+<!-- ════════════════ FLASH CARDS ════════════════ -->
+<div class="section active" id="section-flashcards">
+  <div class="section-title">🃏 Flash Cards — cliquez pour retourner</div>
+  <p class="flip-hint">← → pour naviguer &nbsp;|&nbsp; Espace pour retourner</p>
+
+  <div class="cards-nav">
+    <button class="nav-btn" id="fc-prev" onclick="fcMove(-1)">← Précédente</button>
+    <div class="cards-counter" id="fc-counter">1 / 20</div>
+    <button class="nav-btn" id="fc-next" onclick="fcMove(1)">Suivante →</button>
+  </div>
+
+  <div class="card-scene" id="fc-scene" onclick="fcFlip()">
+    <div class="card-inner" id="fc-inner">
+      <div class="card-face card-front" id="fc-front">
+        <div class="card-tag" id="fc-tag">Python</div>
+        <div class="category-pill" id="fc-cat"></div>
+        <div class="card-question" id="fc-q"></div>
+        <div class="flip-indicator">cliquer pour révéler ▸</div>
+      </div>
+      <div class="card-face card-back" id="fc-back">
+        <div class="card-tag" id="fc-tag-b">Réponse</div>
+        <div class="card-answer" id="fc-a"></div>
+        <div class="flip-indicator">◂ cliquer pour revenir</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ QCM ════════════════ -->
+<div class="section" id="section-qcm">
+  <div class="section-title">❓ Questions à Choix Multiples</div>
+  <div id="qcm-container"></div>
+</div>
+
+<!-- ════════════════ FILL IN THE BLANK ════════════════ -->
+<div class="section" id="section-fill">
+  <div class="section-title">✏️ Complétez les blancs</div>
+  <div id="fill-container"></div>
+</div>
+
+<!-- ════════════════ VRAI / FAUX ════════════════ -->
+<div class="section" id="section-vf">
+  <div class="section-title">✔️ Vrai ou Faux ?</div>
+  <div id="vf-container"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  DONNÉES — Flash Cards (20 cartes)
+// ════════════════════════════════════════════════
+const FC_DATA = [
+  {
+    cat: "archi", catLabel: "Architecture",
+    q: "Quel est le rôle exact de <code>main.py</code> dans le projet ?",
+    a: `<span class="highlight">Point d'entrée unique</span> : il orchestre l'ensemble du flux sans contenir de logique métier. Il appelle <code>charger_donnees()</code> (collecte), puis <code>generation_page_html()</code> (génération), et termine par l'écriture du fichier avec <code>with open(..., encoding="utf-8")</code>. C'est le seul fichier qui utilise <code>os.path.dirname(os.path.abspath(__file__))</code> pour construire un chemin absolu portable.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Qu'est-ce qu'une <em>f-string triple-quoted</em> et pourquoi est-elle utilisée dans <code>generateur_html.py</code> ?",
+    a: `Une f-string préfixée <code>f</code> et délimitée par <code>\"\"\"</code> permet d'écrire du HTML <span class="highlight">multi-lignes avec indentation préservée</span> tout en interpolant des variables Python avec <code>{variable}</code>. Ex : <code>return f\"\"\"&lt;div...&gt;\n  &lt;h2&gt;{titre}&lt;/h2&gt;\"\"\"</code>. Les accolades Python <code>{}</code> étant réservées, on les échappe <code>{{</code> pour les littéraux CSS/JS.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Expliquez la <em>list comprehension</em> ligne 153 de <code>chargement_donnees.py</code> :<br><code>choix_reponses = [c.strip() for c in saisie(...).split(\",\")]</code>",
+    a: `Elle fait <span class="highlight">3 opérations en une ligne</span> : (1) <code>saisie(...)</code> appelle <code>input()</code> et retourne la chaîne brute, (2) <code>.split(\",")</code> la découpe en liste sur les virgules, (3) <code>c.strip()</code> supprime espaces/tabulations autour de chaque élément. Équivalent à une boucle <code>for</code> + <code>append</code> classique, mais plus pythonique et concis.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Pourquoi utilise-t-on <code>d.get(\"difficulte\", 2)</code> au lieu de <code>d[\"difficulte\"]</code> dans <code>creer_ecran_qcm()</code> ?",
+    a: `<code>d[\"difficulte\"]</code> lèverait une <code>KeyError</code> si la clé est absente. <code>.get(clé, valeur_par_défaut)</code> retourne <code>2</code> (niveau Moyen) si la clé n'existe pas, rendant la fonction <span class="highlight">robuste aux données incomplètes</span>. C'est une bonne pratique défensive pour des dictionnaires issus de sources externes.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Quel est le rôle de la <em>classe <code>C</code></em> dans <code>chargement_donnees.py</code> et comment fonctionne un code ANSI comme <code>\\033[32m</code> ?",
+    a: `La classe <code>C</code> est un <span class="highlight">namespace de constantes ANSI</span>. Le code <code>\\033</code> est le caractère Escape (ESC, ASCII 27), suivi de <code>[32m</code> pour vert. Le terminal interprète ces séquences et change la couleur d'affichage. <code>\\033[0m</code> (RESET) remet à zéro. Utilisés comme : <code>f"{C.VERT}✅ OK{C.RESET}"</code>.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Comment <code>echapper_html(texte)</code> protège-t-elle contre les injections XSS ?",
+    a: `Elle chaîne 5 remplacements : <code>&amp;</code>→<code>&amp;amp;</code>, <code>&lt;</code>→<code>&amp;lt;</code>, <code>&gt;</code>→<code>&amp;gt;</code>, <code>"</code>→<code>&amp;quot;</code>, <code>'</code>→<code>&amp;#39;</code>. Si un utilisateur tape <code>&lt;script&gt;alert()&lt;/script&gt;</code>, cela devient du texte inoffensif affiché tel quel. Elle est appelée sur <span class="highlight">tout texte utilisateur</span> : titre, choix, bonne réponse.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Que retourne <code>enumerate(questions, start=1)</code> dans <code>banniere_recap()</code> vs <code>enumerate(donnees)</code> dans <code>creer_ecran_qcm()</code> ?",
+    a: `<code>enumerate(questions, start=1)</code> produit des tuples <code>(1, q0), (2, q1)...</code> — pratique pour l'<span class="highlight">affichage humain</span> (Q1, Q2...). <code>enumerate(donnees)</code> (start=0 par défaut) produit <code>(0, d0), (1, d1)...</code> — utilisé pour nommer les champs radio <code>question0</code>, <code>question1</code>... en HTML. L'index 0 correspond donc bien à <code>name="question0"</code>.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Expliquez l'expression ternaire <code>{\"s\" if nb_questions &gt; 1 else \"\"}</code> dans <code>creer_ecran_lancement()</code>.",
+    a: `Syntaxe Python : <code>valeur_si_vrai if condition else valeur_si_faux</code>. Insérée directement dans une f-string, elle adapte dynamiquement le pluriel : <code>nb=1</code> → <code>""</code> → <span class="highlight">«&nbsp;1 question&nbsp;»</span>, <code>nb=3</code> → <code>"s"</code> → <span class="highlight">«&nbsp;3 questions&nbsp;»</span>. Cela évite un <code>if/else</code> complet séparant la logique de la chaîne.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Quel est l'avantage de <code>os.path.dirname(os.path.abspath(__file__))</code> dans <code>main.py</code> ?",
+    a: `<code>__file__</code> = chemin du script. <code>os.path.abspath()</code> le rend absolu (même si lancé depuis un autre répertoire). <code>os.path.dirname()</code> extrait le dossier parent. Résultat : <code>index.html</code> est <span class="highlight">toujours créé dans le même dossier que main.py</span>, quel que soit le répertoire courant du terminal — comportement portable.`
+  },
+  {
+    cat: "html", catLabel: "HTML",
+    q: "À quoi servent les attributs <code>data-bonne-reponse</code> et <code>data-difficulte</code> sur chaque <code>&lt;div class=\"carte\"&gt;</code> ?",
+    a: `Ce sont des <span class="highlight">attributs data-* HTML5</span> : ils stockent des données métier directement dans le DOM, sans affecter le rendu. JavaScript y accède via <code>carte.dataset.bonneReponse</code> (conversion automatique kebab→camelCase) et <code>carte.dataset.difficulte</code>. Python les écrit lors de la génération ; JS les lit lors de la vérification.`
+  },
+  {
+    cat: "html", catLabel: "HTML",
+    q: "Pourquoi tous les <code>&lt;input type=\"radio\"&gt;</code> d'une même question partagent-ils le même attribut <code>name</code> ?",
+    a: `L'attribut <code>name</code> identifie le <span class="highlight">groupe de radio buttons mutuellement exclusifs</span>. Le navigateur garantit qu'un seul choix peut être sélectionné par groupe. JS récupère le choix coché avec <code>document.querySelector('input[name="questionN"]:checked')</code>. Chaque question utilise un nom unique (<code>question0</code>, <code>question1</code>...) généré par l'index de la boucle <code>enumerate</code>.`
+  },
+  {
+    cat: "html", catLabel: "HTML",
+    q: "Quel mécanisme CSS/HTML masque les écrans <code>ecran-qcm</code> et <code>ecran-fin</code> au chargement ?",
+    a: `La classe CSS <code>.masque { display: none !important; }</code> cache les éléments. En HTML généré, ces divs ont <code>class="masque"</code> par défaut. JavaScript les montre/cache en appelant <code>classList.remove('masque')</code> et <code>classList.add('masque')</code>. Le <code>!important</code> empêche tout autre style de les rendre visibles accidentellement.`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Pourquoi le code JS démarre-t-il avec <code>document.addEventListener('DOMContentLoaded', ...)</code> ?",
+    a: `Cet événement se déclenche quand le <span class="highlight">HTML est entièrement parsé</span>, avant le chargement des images. Sans cela, <code>getElementById('ecran-lancement')</code> pourrait retourner <code>null</code> si le script s'exécute avant que la div existe. Il garantit que le DOM est prêt avant toute manipulation — bonne pratique ES6+.`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Comment fonctionne le timer ? Expliquez <code>setInterval</code>, <code>clearInterval</code> et le formatage <code>padStart(2, '0')</code>.",
+    a: `<code>setInterval(fn, 1000)</code> exécute <code>fn</code> toutes les 1000ms et retourne un ID. <code>clearInterval(timerInterval)</code> stoppe le timer avec cet ID. <code>String(sec).padStart(2,'0')</code> assure le format <span class="highlight">MM:SS</span> : <code>5</code> → <code>"05"</code>. Si <code>secondes &gt; 120</code>, la classe <code>urgent</code> est ajoutée pour l'animation pulse CSS.`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Comment <code>verifierReponses()</code> détermine-t-elle si une réponse est correcte ?",
+    a: `Elle itère sur tous les <code>.carte[data-bonne-reponse]</code>. Pour chaque carte : (1) lit <code>carte.dataset.bonneReponse</code>, (2) récupère <code>querySelector('input[type=radio]:checked').value</code>, (3) compare les deux strings. Résultat : <code>classList.add('correct')</code> ou <code>'incorrect'</code> — qui déclenchent les styles CSS vert/rouge. Les radios sont ensuite <span class="highlight">désactivés</span> (<code>r.disabled = true</code>).`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Expliquez le <em>système de combo</em> : comment <code>maxCombo</code> est-il calculé ?",
+    a: `Une variable <code>comboConsecutif</code> s'incrémente à chaque bonne réponse consécutive et se remet à 0 à chaque erreur. <code>maxCombo = Math.max(maxCombo, comboConsecutif)</code> garde le <span class="highlight">pic maximum</span>. Si <code>maxCombo &gt; 1</code>, l'indicateur combo est affiché avec une animation <code>anime()</code> — scale 0.8 → 1.2 → 1, easing <code>easeOutElastic</code>.`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Comment la <em>Clipboard API</em> est-elle utilisée dans <code>partagerResultat()</code> et quel est le fallback ?",
+    a: `<code>navigator.clipboard.writeText(texte)</code> retourne une Promise. Le <code>.then()</code> affiche «&nbsp;✅ Résultat copié&nbsp;». Le <code>.catch()</code> (fallback) affiche directement le texte à l'écran si l'API est refusée (navigateur sans HTTPS, ou permission refusée). La div feedback disparaît après 3 secondes via <code>setTimeout</code>.`
+  },
+  {
+    cat: "css", catLabel: "CSS",
+    q: "Qu'est-ce qu'une <em>variable CSS</em> (<code>--bleu: #3498db</code>) et comment est-elle utilisée dans le projet ?",
+    a: `Déclarées dans <code>:root {}</code>, ces <span class="highlight">custom properties CSS</span> sont accessibles partout via <code>var(--bleu)</code>. Avantage : changer <code>--vert</code> une fois met à jour toutes les règles <code>.carte.correct</code>, <code>.badge-difficulte.facile</code>, etc. Le projet définit 7 variables (<code>--bleu</code>, <code>--vert</code>, <code>--rouge</code>, <code>--orange</code>, <code>--fond</code>, <code>--texte</code>, <code>--carte-bg</code>).`
+  },
+  {
+    cat: "css", catLabel: "CSS",
+    q: "Expliquez l'animation CSS <code>@keyframes pulse</code> sur <code>#timer-valeur.urgent</code>.",
+    a: `Déclarée : <code>0%,100% { transform:scale(1) } 50% { transform:scale(1.1) }</code>. Appliquée quand <code>secondes &gt; 120</code> : JS ajoute la classe <code>urgent</code> qui déclenche <code>animation: pulse 1s infinite</code>. L'élément gonfle et rétrécit à l'infini, attirant l'attention. Une 2e animation <code>float</code> fait léviter le combo-indicator toutes les 2s.`
+  },
+  {
+    cat: "css", catLabel: "CSS",
+    q: "Comment les <em>media queries</em> rendent-elles le QCM responsive ? Quels breakpoints sont utilisés ?",
+    a: `Deux breakpoints : <code>@media (max-width: 768px)</code> réduit padding et font-size pour tablettes, passe <code>.btn-row-fin</code> en colonne. <code>@media (max-width: 480px)</code> cible les téléphones, réduit encore titres et score. <code>.question-header</code> utilise <code>flex-wrap: wrap</code> pour que le badge de difficulté passe sous le titre sur petits écrans.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Que fait exactement <code>creer_structure(head, body)</code> dans <code>generateur_html.py</code> et pourquoi place-t-elle les balises <code>&lt;script&gt;</code> à la fin du <code>&lt;body&gt;</code> ?",
+    a: `Elle assemble la page complète via une f-string triple-quoted : enveloppe <code>head</code> dans <code>&lt;head&gt;</code> et <code>body</code> dans <code>&lt;body&gt;</code>. Les <code>&lt;script&gt;</code> (Anime.js + <code>script.js</code>) sont placés <span class="highlight">en toute fin de body</span> pour que le DOM soit entièrement parsé avant l'exécution JS — évite les <code>getElementById</code> retournant <code>null</code>.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Expliquez le calcul du padding asymétrique dans <code>ligne()</code> :<br><code>pad_g = pad_total // 2</code><br><code>pad_d = pad_total - pad_g</code>",
+    a: `Quand <code>pad_total</code> est impair (ex: 5), la division entière <code>//</code> donne <code>pad_g = 2</code> et la soustraction donne <code>pad_d = 3</code>. Le pixel excédentaire va à droite. Cela garantit que le texte reste <span class="highlight">toujours dans les bornes du cadre</span> sans jamais déborder sur la ligne suivante — robustesse sur les longueurs impaires.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Quelle est la différence de comportement entre <code>bloc_section()</code> et <code>bloc_confirmation()</code> dans <code>chargement_donnees.py</code> ?",
+    a: `<code>bloc_section()</code> appelle <code>haut()</code>, <code>vide()</code>, <code>ligne()</code> — elle <span class="highlight">laisse le cadre ouvert</span> (pas de <code>bas()</code>) pour que <code>saisie()</code> le ferme juste avant l'<code>input()</code>. <code>bloc_confirmation()</code> est un cadre <span class="highlight">entièrement fermé</span> (<code>haut+vide+ligne+vide+bas</code>) en vert, utilisé uniquement pour confirmer un choix valide — aucune saisie n'est attendue après.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Pourquoi <code>saisie()</code> appelle-t-elle <code>bas()</code> avant de faire <code>input()</code> ?",
+    a: `Parce que <code>bloc_section()</code> laisse intentionnellement le cadre ouvert (sans <code>bas()</code>). <code>saisie()</code> ferme d'abord le cadre graphiquement avec <code>bas()</code>, puis affiche le prompt indenté juste en dessous. Résultat visuel : <code>╭───╮ / │ titre │ / ╰───╯ / → saisie :</code> — <span class="highlight">le cadre et le prompt forment un tout cohérent</span>.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Que signifie <code>from chargement_donnees import *</code> dans <code>main.py</code> et quel risque cela comporte-t-il ?",
+    a: `Le <em>wildcard import</em> importe <span class="highlight">tous les noms publics</span> du module (fonctions, constantes, la classe <code>C</code>...) dans l'espace de noms global de <code>main.py</code>. Risque : une fonction avec le même nom dans <code>generateur_html.py</code> (aussi importée avec <code>*</code>) écraserait silencieusement la première — <em>collision de noms</em>. Dans ce projet, les deux modules ont des noms distincts, donc pas de conflit.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Dans <code>banniere_recap()</code>, pourquoi le <code>sep()</code> séparateur est-il conditionnel : <code>if i &lt; len(questions)</code> ?",
+    a: `Pour éviter d'afficher un séparateur <code>├──┤</code> <span class="highlight">après la dernière question</span>, qui serait visuellement incohérent juste avant le <code>bas()</code> final. La condition garantit que le tiret ne s'affiche qu'entre deux questions consécutives — technique classique pour éviter le trailing separator.`
+  },
+  {
+    cat: "python", catLabel: "Python",
+    q: "Pourquoi <code>demander_questions()</code> est-elle définie <em>à l'intérieur</em> de <code>charger_donnees()</code> dans <code>chargement_donnees.py</code> ?",
+    a: `C'est une <span class="highlight">fonction imbriquée</span> (<em>nested function</em>). Elle est encapsulée dans <code>charger_donnees()</code> car elle ne doit pas être appelable depuis l'extérieur — c'est un détail d'implémentation interne. <code>charger_donnees()</code> est le seul point d'entrée public ; elle délègue immédiatement à <code>demander_questions()</code> et retourne son résultat.`
+  },
+  {
+    cat: "html", catLabel: "HTML",
+    q: "Dans <code>creer_head()</code>, pourquoi génère-t-on <code>&lt;meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"&gt;</code> ?",
+    a: `Sans cette balise, les navigateurs mobiles <span class="highlight">zooment dézoomés</span> et affichent la page à la largeur desktop (980px). Avec elle : <code>width=device-width</code> force la largeur au viewport réel, <code>initial-scale=1.0</code> évite tout zoom initial. C'est le prérequis indispensable pour que les media queries CSS fonctionnent correctement sur mobile.`
+  },
+  {
+    cat: "html", catLabel: "HTML",
+    q: "Quel est le rôle du <code>&lt;label class=\"choix\"&gt;</code> qui enveloppe chaque <code>&lt;input type=\"radio\"&gt;</code> dans <code>creer_section()</code> ?",
+    a: `Le <code>&lt;label&gt;</code> agit comme <span class="highlight">zone de clic élargie</span> : cliquer n'importe où sur le label (texte ou espace) coche le radio associé. Sans label, seul le petit cercle radio serait cliquable. De plus, <code>display: block</code> en CSS transforme chaque label en <em>bloc cliquable pleine largeur</em> — essentiel pour l'ergonomie mobile (grande zone tactile).`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Pourquoi <code>verifierReponses()</code> utilise-t-elle <code>setTimeout(() =&gt; afficherEcranFin(...), 1500)</code> plutôt qu'un appel direct ?",
+    a: `Le délai de 1500ms laisse le temps aux <span class="highlight">transitions CSS vert/rouge</span> de s'afficher sur les cartes avant que l'écran ne soit masqué. Sans ce délai, l'écran QCM disparaîtrait instantanément et l'utilisateur ne verrait jamais le feedback visuel de ses réponses. C'est une technique d'UX classique : laisser la réaction visuelle se produire avant de changer d'écran.`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Dans <code>afficherEcranFin()</code>, comment sont déterminés les 4 titres de résultat et quels sont leurs seuils exacts ?",
+    a: `Quatre paliers comparés dans l'ordre : <code>score === total</code> → <em>Score parfait ! 🏆</em> ; <code>score &gt;= total * 0.7</code> → <em>Bien joué ! 👍</em> ; <code>score &gt;= total * 0.5</code> → <em>Pas mal ! 💪</em> ; sinon → <em>Continuez à vous entraîner ! 📚</em>. Les seuils sont <span class="highlight">relatifs au nombre total</span> de questions, ce qui rend le système scalable quel que soit le nombre de questions générées.`
+  },
+  {
+    cat: "js", catLabel: "JavaScript",
+    q: "Quelle est la différence entre <code>innerHTML</code> et <code>textContent</code> dans ce projet ? Où chacun est-il utilisé ?",
+    a: `<code>textContent</code> insère du <span class="highlight">texte brut</span> — les balises HTML sont affichées telles quelles, pas interprétées. Utilisé pour les titres dynamiques (<code>fin-titre</code>, <code>combo-text</code>, texte du bouton vérifier). <code>innerHTML</code> interprète le HTML — utilisé pour <code>fin-recap-questions</code> car le récap contient des <code>&lt;div&gt;</code>, <code>&lt;em&gt;</code>. Danger : <code>innerHTML</code> avec données non-échappées = faille XSS, d'où l'importance de <code>echapper_html()</code> en Python.`
+  },
+  {
+    cat: "css", catLabel: "CSS",
+    q: "Pourquoi <code>position: sticky; top: 0</code> est-il utilisé sur <code>#barre-timer</code> dans <code>style.css</code> ?",
+    a: `<code>sticky</code> est un hybride entre <code>relative</code> et <code>fixed</code> : l'élément <span class="highlight">suit le scroll jusqu'à atteindre <code>top: 0</code></span>, puis se fixe en haut du viewport. Ainsi, le timer reste toujours visible pendant le défilement des questions, sans sortir du flux document (contrairement à <code>fixed</code> qui superpose tout). Le <code>z-index: 100</code> assure qu'il passe par-dessus les cartes.`
+  },
+  {
+    cat: "css", catLabel: "CSS",
+    q: "Qu'apporte <code>font-variant-numeric: tabular-nums</code> sur <code>#timer-valeur</code> et <code>.score-valeur</code> ?",
+    a: `Sans cette propriété, les chiffres ont des largeurs variables (le <code>1</code> est plus étroit que le <code>8</code>), ce qui fait <span class="highlight">sautiller le texte</span> horizontalement à chaque seconde. <code>tabular-nums</code> force une largeur fixe identique pour chaque chiffre — le timer passe de <code>00:09</code> à <code>00:10</code> sans décalage visuel. Indispensable pour tout affichage numérique animé.`
+  },
+  {
+    cat: "css", catLabel: "CSS",
+    q: "Que fait <code>accent-color: var(--bleu)</code> sur les <code>input[type=\"radio\"]</code> dans <code>style.css</code> ?",
+    a: `<code>accent-color</code> est une propriété CSS moderne (2022) qui colore le <span class="highlight">rendu natif des contrôles de formulaire</span> (radios, checkboxes, progress...) sans avoir à les reconstruire custom. Ici, elle teinte le cercle coché de <code>--bleu</code> au lieu du gris par défaut du navigateur — cohérence visuelle minimale avec l'effort de style maximal.`
+  }
+];
+
+// ════════════════════════════════════════════════
+//  DONNÉES — QCM (12 questions)
+// ════════════════════════════════════════════════
+const QCM_DATA = [
+  {
+    cat: "python", q: "Que retourne <code>echapper_html(\"A &amp; B &lt;test&gt;\")</code> ?",
+    opts: [
+      "A &amp; B &lt;test&gt;",
+      "A &amp;amp; B &amp;lt;test&amp;gt;",
+      "A & B <test>",
+      "A &amp;amp; B \\&lt;test\\&gt;"
+    ],
+    correct: 1,
+    expl: `La fonction remplace d'abord <code>&amp;</code>→<code>&amp;amp;</code>, puis <code>&lt;</code>→<code>&amp;lt;</code> et <code>&gt;</code>→<code>&amp;gt;</code>. Résultat : <code>A &amp;amp; B &amp;lt;test&amp;gt;</code>.`
+  },
+  {
+    cat: "python", q: "Dans <code>creer_section(2, \"Q\", [\"A\",\"B\"], \"A\", 3)</code>, quel sera l'attribut <code>name</code> des radio buttons ?",
+    opts: [
+      "<code>name=\"question2\"</code>",
+      "<code>name=\"question3\"</code>",
+      "<code>name=\"Q2\"</code>",
+      "<code>name=\"radio2\"</code>"
+    ],
+    correct: 0,
+    expl: `Le premier argument <code>index=2</code> est directement inséré : <code>name=\"question{index}\"</code> → <code>name=\"question2\"</code>. Le 5e argument (difficulté=3) ne change pas le nom.`
+  },
+  {
+    cat: "python", q: "Que se passe-t-il si l'on appelle <code>d.get(\"difficulte\", 2)</code> et que le dictionnaire <code>d</code> ne contient pas la clé <code>\"difficulte\"</code> ?",
+    opts: [
+      "Une <code>KeyError</code> est levée",
+      "Retourne <code>None</code>",
+      "Retourne <code>2</code>",
+      "Retourne <code>False</code>"
+    ],
+    correct: 2,
+    expl: `<code>.get(clé, valeur_défaut)</code> retourne la valeur par défaut (<code>2</code>) si la clé est absente — sans lever d'exception. C'est exactement son rôle dans le projet.`
+  },
+  {
+    cat: "python", q: "Pourquoi <code>os.path.abspath(__file__)</code> est-il préférable à simplement <code>__file__</code> ?",
+    opts: [
+      "Pour convertir les backslashes Windows en slashes",
+      "Pour garantir un chemin absolu quel que soit le répertoire courant",
+      "Pour vérifier que le fichier existe",
+      "Pour obtenir uniquement le nom de fichier sans extension"
+    ],
+    correct: 1,
+    expl: `<code>__file__</code> peut être relatif si Python est lancé depuis un autre dossier. <code>abspath()</code> le résout en chemin absolu complet, assurant que <code>index.html</code> est créé au bon endroit.`
+  },
+  {
+    cat: "html", q: "Comment JavaScript accède-t-il à <code>data-bonne-reponse=\"Paris\"</code> ?",
+    opts: [
+      "<code>carte.getAttribute('bonne-reponse')</code>",
+      "<code>carte.dataset['bonne-reponse']</code>",
+      "<code>carte.dataset.bonneReponse</code>",
+      "<code>carte.data.bonneReponse</code>"
+    ],
+    correct: 2,
+    expl: `L'API <code>dataset</code> convertit automatiquement kebab-case en camelCase : <code>data-bonne-reponse</code> → <code>dataset.bonneReponse</code>. <code>getAttribute('data-bonne-reponse')</code> fonctionnerait aussi mais <code>dataset</code> est plus moderne.`
+  },
+  {
+    cat: "js", q: "Quel est l'effet de <code>setInterval(fn, 1000)</code> dans le timer ?",
+    opts: [
+      "Exécute <code>fn</code> une seule fois après 1 seconde",
+      "Exécute <code>fn</code> toutes les 1000 millisecondes indéfiniment",
+      "Exécute <code>fn</code> 1000 fois puis s'arrête",
+      "Pause le script pendant 1 seconde"
+    ],
+    correct: 1,
+    expl: `<code>setInterval</code> crée un intervalle répétitif. <code>setTimeout</code> s'exécuterait une seule fois. L'ID retourné est stocké dans <code>timerInterval</code> pour pouvoir appeler <code>clearInterval(timerInterval)</code> et arrêter le timer.`
+  },
+  {
+    cat: "js", q: "Dans <code>verifierReponses()</code>, que retourne <code>carte.querySelector('input[type=\"radio\"]:checked')</code> si aucun radio n'est coché ?",
+    opts: [
+      "Une string vide <code>\"\"</code>",
+      "<code>undefined</code>",
+      "<code>null</code>",
+      "Le premier radio du groupe"
+    ],
+    correct: 2,
+    expl: `<code>querySelector</code> retourne <code>null</code> si aucun élément ne correspond. C'est pourquoi le code utilise l'opérateur conditionnel : <code>const reponseChoisie = radioChecked ? radioChecked.value : null</code>.`
+  },
+  {
+    cat: "css", q: "Que signifie <code>transition: all 0.3s ease</code> sur <code>.carte</code> ?",
+    opts: [
+      "Anime toutes les propriétés CSS en 0.3 millisecondes avec accélération",
+      "Anime toutes les propriétés CSS changeantes sur 0.3 secondes avec courbe ease",
+      "Applique une animation infinie de 0.3 secondes",
+      "Retarde l'affichage de la carte de 0.3 secondes"
+    ],
+    correct: 1,
+    expl: `<code>all</code> cible toutes les propriétés modifiées (border, background, box-shadow, transform...). <code>0.3s</code> est la durée. <code>ease</code> est la courbe (début lent, milieu rapide, fin lente). La transition s'active au survol (<code>:hover</code>) et lors des changements de classe (correct/incorrect).`
+  },
+  {
+    cat: "python", q: "Quelle est la différence entre <code>haut()</code> et <code>bloc_titre()</code> dans <code>chargement_donnees.py</code> ?",
+    opts: [
+      "<code>haut()</code> est une fonction privée, <code>bloc_titre()</code> est publique",
+      "<code>haut()</code> affiche uniquement la ligne supérieure du cadre ; <code>bloc_titre()</code> appelle <code>haut()</code>, <code>vide()</code>, <code>ligne()</code>, <code>vide()</code>, <code>bas()</code>",
+      "Elles font la même chose mais avec des couleurs différentes",
+      "<code>haut()</code> ouvre le cadre pour une saisie ; <code>bloc_titre()</code> ferme le cadre"
+    ],
+    correct: 1,
+    expl: `<code>haut()</code> est une <strong>primitive</strong> qui imprime juste la ligne <code>╭──...──╮</code>. <code>bloc_titre()</code> est un <strong>composite</strong> qui assemble plusieurs primitives pour créer un cadre complet fermé avec un titre centré — sans laisser de saisie ouverte.`
+  },
+  {
+    cat: "js", q: "Anime.js est chargé via CDN. Quel problème cela pose-t-il ?",
+    opts: [
+      "Aucun, le CDN Cloudflare est toujours disponible",
+      "Le QCM ne fonctionnera pas hors connexion Internet",
+      "Anime.js ralentit le chargement de plus de 5 secondes",
+      "Anime.js est incompatible avec Firefox"
+    ],
+    correct: 1,
+    expl: `Le rapport (§3.1) liste «&nbsp;Connexion Internet pour charger Anime.js depuis le CDN Cloudflare&nbsp;» comme prérequis. Sans Internet, les animations du combo indicator et autres effets <code>anime()</code> ne fonctionneront pas — le reste du QCM reste opérationnel.`
+  },
+  {
+    cat: "python", q: "Quel est l'ordre des remplacements dans <code>echapper_html()</code> et pourquoi <code>&amp;</code> doit-il être traité en premier ?",
+    opts: [
+      "L'ordre est arbitraire, tous les remplacements sont indépendants",
+      "<code>&amp;</code> doit être en premier car sinon les <code>&amp;amp;</code> générés par d'autres remplacements seraient eux-mêmes échappés à nouveau",
+      "<code>&lt;</code> doit être en premier pour des raisons de performance",
+      "<code>'</code> doit être en dernier car c'est le plus rare"
+    ],
+    correct: 1,
+    expl: `Si on échappait <code>&lt;</code> en premier → <code>&amp;lt;</code>, puis on échappait <code>&amp;</code> → <code>&amp;amp;lt;</code> : double échappement ! En traitant <code>&amp;</code> en premier, on évite de ré-échapper les entités HTML déjà générées.`
+  },
+  {
+    cat: "css", q: "Pourquoi <code>.masque { display: none !important; }</code> utilise-t-il <code>!important</code> ?",
+    opts: [
+      "Pour que la classe fonctionne dans tous les navigateurs",
+      "Pour forcer le masquage même si un autre sélecteur plus spécifique donnerait <code>display: block</code>",
+      "C'est une erreur de style — <code>!important</code> est inutile ici",
+      "Pour déclencher un reflow CSS forcé"
+    ],
+    correct: 1,
+    expl: `Sans <code>!important</code>, un sélecteur plus spécifique (ex : <code>#ecran-qcm</code>) pourrait outrepasser la règle. Le <code>!important</code> garantit que <code>.masque</code> prime toujours — pattern courant pour les utilitaires de visibilité.`
+  },
+  {
+    cat: "python", q: "Dans <code>creer_ecran_lancement()</code>, que produit l'expression <code>{\"s\" if nb_questions > 1 else \"\"}</code> quand <code>nb_questions = 1</code> ?",
+    opts: [
+      "<code>\"s\"</code>",
+      "<code>\"\"</code> (chaîne vide — pas de 's')",
+      "<code>None</code>",
+      "Une <code>SyntaxError</code>"
+    ],
+    correct: 1,
+    expl: `Quand <code>nb_questions = 1</code>, la condition <code>1 > 1</code> est <code>False</code>, donc l'expression ternaire retourne <code>""</code>. La page affiche <em>"1 question"</em> et non <em>"1 questions"</em>. Avec 3 : <code>3 > 1 = True</code> → <code>"s"</code> → <em>"3 questions"</em>.`
+  },
+  {
+    cat: "python", q: "Quelle est la valeur de retour de <code>charger_donnees()</code> dans <code>chargement_donnees.py</code> ?",
+    opts: [
+      "Un dictionnaire avec les clés <code>question</code>, <code>choix</code>, <code>reponse</code>",
+      "Une liste de dictionnaires, chacun ayant les clés <code>'question'</code>, <code>'choix_reponses'</code>, <code>'bonne_reponse'</code>, <code>'difficulte'</code>",
+      "Un fichier JSON écrit sur le disque",
+      "Un tuple (questions, reponses)"
+    ],
+    correct: 1,
+    expl: `La fonction <code>demander_questions()</code> construit <code>liste_questions</code> en y ajoutant des dicts via <code>.append({...})</code>. Chaque dict a exactement 4 clés : <code>'question'</code>, <code>'choix_reponses'</code>, <code>'bonne_reponse'</code>, <code>'difficulte'</code>. C'est cette liste que <code>charger_donnees()</code> retourne à <code>main.py</code>.`
+  },
+  {
+    cat: "js", q: "Dans <code>demarrerQCM()</code>, pourquoi réinitialise-t-on explicitement <code>secondes = 0</code> et <code>timerArrete = false</code> ?",
+    opts: [
+      "Ces variables sont locales à la fonction, donc toujours fraîches",
+      "Pour que le rejouer fonctionne : sans reset, le timer reprendrait depuis le temps de la partie précédente",
+      "Pour éviter une fuite mémoire JavaScript",
+      "C'est redondant car <code>window.location.reload()</code> réinitialise tout"
+    ],
+    correct: 1,
+    expl: `Ces variables sont globales. Si on rejoue via <code>demarrerQCM()</code> (appel hypothétique), sans reset <code>secondes</code> continuerait depuis la fin de la partie précédente. <code>timerArrete = false</code> est essentiel car <code>arreterTimer()</code> le met à <code>true</code> — sans reset, le callback <code>setInterval</code> ne s'exécuterait plus.`
+  },
+  {
+    cat: "html", q: "Dans le HTML généré par <code>creer_section()</code>, quelle est la valeur de <code>data-bonne-reponse</code> si la réponse contient un guillemet double : <code>\"Oui\"</code> ?",
+    opts: [
+      "<code>data-bonne-reponse=\"Oui\"</code> — les guillemets internes cassent l'attribut HTML",
+      "<code>data-bonne-reponse=\"&amp;quot;Oui&amp;quot;\"</code> — <code>echapper_html()</code> remplace <code>\"</code> par <code>&amp;quot;</code>",
+      "<code>data-bonne-reponse='\"Oui\"'</code> — Python bascule automatiquement sur les apostrophes",
+      "Une <code>ValueError</code> est levée"
+    ],
+    correct: 1,
+    expl: `<code>echapper_html()</code> remplace <code>"</code> par <code>&amp;quot;</code> avant injection dans l'attribut. Sans ça, <code>data-bonne-reponse="\"Oui\""</code> fermerait prématurément l'attribut, cassant le HTML. C'est exactement pourquoi l'échappement est appliqué à <code>bonne_reponse</code> ET à chaque choix.`
+  },
+  {
+    cat: "python", q: "Dans <code>creer_ecran_qcm()</code>, que vaut <code>html_sections</code> avant la boucle <code>for</code> ?",
+    opts: [
+      "<code>None</code>",
+      "<code>[]</code> (liste vide)",
+      "<code>\"\"</code> (chaîne vide)",
+      "<code>0</code>"
+    ],
+    correct: 2,
+    expl: `<code>html_sections = ""</code> initialise une chaîne vide. La boucle <code>for i, d in enumerate(donnees)</code> y concatène le HTML de chaque carte via <code>+=</code>. Cette technique d'accumulation de chaînes est directe mais pourrait être remplacée par <code>"".join([...])</code> pour de très grands volumes — sans impact ici.`
+  },
+  {
+    cat: "css", q: "Dans <code>style.css</code>, que produit <code>background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)</code> sur le <code>body</code> ?",
+    opts: [
+      "Un fond uni violet <code>#667eea</code>",
+      "Un dégradé diagonal de bleu-violet (#667eea) en haut-gauche vers violet (#764ba2) en bas-droite",
+      "Un dégradé horizontal de gauche à droite",
+      "Une image de fond importée depuis une URL externe"
+    ],
+    correct: 1,
+    expl: `<code>135deg</code> est l'angle : 0° = haut vers bas, 90° = gauche vers droite, 135° = diagonal haut-gauche vers bas-droite. <code>0%</code> et <code>100%</code> sont les color stops — début et fin du dégradé. Le résultat est le fond violet caractéristique du QCM interactif.`
+  },
+  {
+    cat: "js", q: "Dans <code>afficherEcranFin()</code>, comment est formaté le temps final affiché ?",
+    opts: [
+      "Directement depuis <code>timerInterval</code>",
+      "Depuis la variable globale <code>secondes</code> : <code>Math.floor(secondes/60)</code> et <code>secondes%60</code>, mis en forme avec <code>padStart(2,'0')</code>",
+      "Depuis le contenu textuel de <code>#timer-valeur</code> récupéré avec <code>textContent</code>",
+      "Depuis un timestamp <code>Date.now()</code> soustrait au démarrage"
+    ],
+    correct: 1,
+    expl: `<code>afficherEcranFin()</code> lit directement la variable globale <code>secondes</code> (déjà figée par <code>arreterTimer()</code>). Elle recalcule <code>minutes</code> et <code>sec</code> puis applique <code>padStart(2,'0')</code> pour le format <code>MM:SS</code> — identique à la logique du timer en direct.`
+  },
+  {
+    cat: "python", q: "Dans <code>chargement_donnees.py</code>, que se passe-t-il si l'utilisateur saisit <code>\"0\"</code> pour le nombre de questions ?",
+    opts: [
+      "Le programme plante avec une <code>IndexError</code>",
+      "Le programme génère une page HTML vide",
+      "La validation <code>nb_saisie.isdigit() and int(nb_saisie) >= 1</code> échoue et redemande la saisie",
+      "Le programme accepte 0 et saute la boucle principale"
+    ],
+    correct: 2,
+    expl: `<code>\"0\".isdigit()</code> retourne <code>True</code> (c'est un chiffre), mais <code>int(\"0\") >= 1</code> est <code>False</code>. La condition complète est donc <code>False</code> : on n'entre pas dans le <code>break</code>, le message <em>"Entrez un entier ≥ 1"</em> s'affiche et la boucle <code>while True</code> recommence.`
+  },
+  {
+    cat: "python", q: "Dans <code>generateur_html.py</code>, quelle fonction est le <em>point d'entrée unique</em> appelé par <code>main.py</code> pour générer toute la page ?",
+    opts: [
+      "<code>creer_structure()</code>",
+      "<code>creer_body()</code>",
+      "<code>generation_page_html()</code>",
+      "<code>creer_head()</code>"
+    ],
+    correct: 2,
+    expl: `<code>generation_page_html(titre_site, titre_page, donnees)</code> est le seul point d'entrée public. Elle appelle <code>creer_head()</code> puis <code>creer_body()</code> (qui appelle <code>creer_ecran_lancement()</code>, <code>creer_ecran_qcm()</code>, <code>creer_ecran_fin()</code>), puis passe le tout à <code>creer_structure()</code> — architecture en cascade.`
+  }
+];
+
+// ════════════════════════════════════════════════
+//  DONNÉES — Fill in the blank (10 exercices)
+// ════════════════════════════════════════════════
+const FILL_DATA = [
+  {
+    cat: "python",
+    context: "Dans <code>generateur_html.py</code>, <code>creer_ecran_lancement()</code>",
+    statement: "___1___ f\"\"\"...{nb_questions} question{___2___ if nb_questions > 1 else \"\"}...\"\"\"\n# nb_questions = 3 → \"3 questions\"",
+    blanks: ["return", "\"s\""],
+    answers: ["return", "\"s\""],
+    hints: ["Mot-clé Python pour renvoyer une valeur d'une fonction", "Caractère à ajouter pour le pluriel"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>chargement_donnees.py</code>, traitement des choix saisis",
+    statement: "choix_reponses = [c.___1___() for c in saisie_brute.___2___(\",\")]",
+    blanks: ["strip", "split"],
+    answers: ["strip", "split"],
+    hints: ["Méthode supprimant espaces/tabulations en début et fin de chaîne", "Méthode découpant une chaîne selon un séparateur"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>generateur_html.py</code>, <code>creer_section()</code>",
+    statement: "diff_label = difficultes_labels.___1___(difficulte, ___2___)",
+    blanks: ["get", "\"Moyen\""],
+    answers: ["get", "\"Moyen\""],
+    hints: ["Méthode dict avec valeur par défaut", "Valeur retournée si la clé est absente (niveau intermédiaire)"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>main.py</code>, écriture du fichier HTML",
+    statement: "with ___1___(chemin_fichier_html, \"w\", ___2___=\"utf-8\") as f:\n    f.write(html)",
+    blanks: ["open", "encoding"],
+    answers: ["open", "encoding"],
+    hints: ["Fonction Python pour ouvrir/créer un fichier", "Paramètre nommé spécifiant le jeu de caractères"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>generateur_html.py</code>, <code>creer_ecran_qcm()</code>",
+    statement: "for ___1___, d in ___2___(donnees):\n    html_sections += creer_section(i, ...)",
+    blanks: ["i", "enumerate"],
+    answers: ["i", "enumerate"],
+    hints: ["Nom de la variable d'index (convention)", "Fonction built-in qui retourne index + élément"]
+  },
+  {
+    cat: "html",
+    context: "Dans l'HTML généré, chaque carte de question",
+    statement: "<div class=\"carte\"\n     ___1___-bonne-reponse=\"Paris\"\n     ___1___-difficulte=\"1\">",
+    blanks: ["data"],
+    answers: ["data"],
+    hints: ["Préfixe HTML5 pour stocker des données personnalisées dans le DOM"]
+  },
+  {
+    cat: "js",
+    context: "Dans <code>script.js</code>, démarrage du timer",
+    statement: "timerInterval = ___1___(___2___ => {\n    secondes++;\n    // ...\n}, 1000);",
+    blanks: ["setInterval", "()"],
+    answers: ["setInterval", "()"],
+    hints: ["Fonction JS qui exécute répétitivement", "Syntaxe arrow function sans paramètre"]
+  },
+  {
+    cat: "js",
+    context: "Dans <code>script.js</code>, <code>verifierReponses()</code>",
+    statement: "const bonneReponse = carte.___1___.___2___;\n// HTML: data-bonne-reponse=\"Ottawa\"",
+    blanks: ["dataset", "bonneReponse"],
+    answers: ["dataset", "bonneReponse"],
+    hints: ["Propriété JS donnant accès aux attributs data-*", "Forme camelCase de data-bonne-reponse"]
+  },
+  {
+    cat: "css",
+    context: "Dans <code>style.css</code>, masquage des écrans",
+    statement: ".masque {\n    ___1___: ___2___ !important;\n}",
+    blanks: ["display", "none"],
+    answers: ["display", "none"],
+    hints: ["Propriété CSS qui contrôle l'affichage de la boîte", "Valeur qui retire l'élément du flux"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>chargement_donnees.py</code>, validation du nombre de questions",
+    statement: "while True:\n    nb = input(\"...\")\n    if nb.___1___() and int(nb) >= 1:\n        break",
+    blanks: ["isdigit"],
+    answers: ["isdigit"],
+    hints: ["Méthode de chaîne vérifiant que tous les caractères sont des chiffres"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>generateur_html.py</code>, <code>creer_structure()</code> — assemblage final",
+    statement: "___1___ f\"\"\"<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n    {___2___}\n</head>\"\"\"",
+    blanks: ["return", "head"],
+    answers: ["return", "head"],
+    hints: ["Mot-clé Python pour renvoyer la valeur", "Paramètre contenant le HTML de l'en-tête"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>chargement_donnees.py</code>, <code>banniere_recap()</code> — séparateur conditionnel",
+    statement: "if ___1___ < ___2___(questions):\n    sep(couleur=C.DIM)",
+    blanks: ["i", "len"],
+    answers: ["i", "len"],
+    hints: ["Variable d'index dans enumerate(questions, start=1)", "Fonction Python retournant la taille d'une liste"]
+  },
+  {
+    cat: "js",
+    context: "Dans <code>script.js</code>, <code>arreterTimer()</code>",
+    statement: "function arreterTimer() {\n    ___1___ = true;\n    if (timerInterval) {\n        ___2___(timerInterval);\n        timerInterval = null;\n    }\n}",
+    blanks: ["timerArrete", "clearInterval"],
+    answers: ["timerArrete", "clearInterval"],
+    hints: ["Variable globale booléenne signalant l'arrêt du timer", "Fonction JS qui stoppe un setInterval via son ID"]
+  },
+  {
+    cat: "js",
+    context: "Dans <code>script.js</code>, <code>afficherEcranFin()</code> — seuil score parfait",
+    statement: "if (score ___1___ total) {\n    titre = \"Score parfait ! 🏆\";\n} else if (score >= total * ___2___) {\n    titre = \"Bien joué ! 👍\";\n}",
+    blanks: ["===", "0.7"],
+    answers: ["===", "0.7"],
+    hints: ["Opérateur d'égalité stricte JavaScript", "Seuil à 70% du total pour le 2e palier"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>generateur_html.py</code>, <code>creer_head()</code> — balise viewport",
+    statement: "<meta name=\"___1___\" content=\"width=___2___, initial-scale=1.0\">",
+    blanks: ["viewport", "device-width"],
+    answers: ["viewport", "device-width"],
+    hints: ["Nom de la meta indispensable pour le rendu mobile", "Valeur qui adapte la largeur à l'écran physique de l'appareil"]
+  },
+  {
+    cat: "python",
+    context: "Dans <code>chargement_donnees.py</code>, la classe de couleurs ANSI",
+    statement: "class C:\n    RESET = \"\\033[___1___m\"\n    VERT  = \"\\033[___2___m\"",
+    blanks: ["0", "32"],
+    answers: ["0", "32"],
+    hints: ["Code ANSI qui remet les attributs à zéro", "Code ANSI pour la couleur verte"]
+  },
+  {
+    cat: "js",
+    context: "Dans <code>script.js</code>, <code>verifierReponses()</code> — combo",
+    statement: "if (correct) {\n    score++;\n    comboConsecutif___1___;\n    maxCombo = Math.___2___(maxCombo, comboConsecutif);\n} else {\n    comboConsecutif = 0;\n}",
+    blanks: ["++", "max"],
+    answers: ["++", "max"],
+    hints: ["Opérateur d'incrémentation unitaire", "Méthode Math retournant le plus grand de deux nombres"]
+  }
+];
+
+// ════════════════════════════════════════════════
+//  DONNÉES — Vrai / Faux (12 assertions)
+// ════════════════════════════════════════════════
+const VF_DATA = [
+  {
+    cat: "python",
+    statement: "Les f-strings (préfixe <code>f</code>) sont disponibles depuis Python 3.0.",
+    answer: false,
+    expl: `Faux. Les f-strings ont été introduites par la <strong>PEP 498</strong> dans <strong>Python 3.6</strong> (2016). Avant, on utilisait <code>%</code> ou <code>.format()</code>.`
+  },
+  {
+    cat: "python",
+    statement: "Dans <code>chargement_donnees.py</code>, la constante <code>LARGEUR = 54</code> représente la largeur totale des cadres ASCII affichés dans le terminal.",
+    answer: true,
+    expl: `Vrai. <code>LARGEUR</code> est utilisée dans <code>haut()</code>, <code>bas()</code>, <code>sep()</code> pour calculer le nombre de tirets <code>'─' * (LARGEUR - 2)</code> et le padding des lignes.`
+  },
+  {
+    cat: "python",
+    statement: "<code>with open(fichier, 'w', encoding='utf-8') as f</code> ferme automatiquement le fichier même si une exception est levée lors de l'écriture.",
+    answer: true,
+    expl: `Vrai. C'est l'avantage principal du context manager (<code>with</code>) : la méthode <code>__exit__</code> est appelée garantissant la fermeture, même en cas d'erreur — contrairement à <code>f = open(...)</code> suivi de <code>f.close()</code>.`
+  },
+  {
+    cat: "html",
+    statement: "L'attribut <code>data-difficulte</code> stockant <code>\"1\"</code> est récupéré en JavaScript comme un entier via <code>carte.dataset.difficulte === 1</code>.",
+    answer: false,
+    expl: `Faux. Les attributs <code>data-*</code> sont toujours des <strong>strings</strong>. <code>carte.dataset.difficulte</code> retourne la chaîne <code>"1"</code>, pas le nombre <code>1</code>. La comparaison <code>=== 1</code> serait fausse.`
+  },
+  {
+    cat: "js",
+    statement: "<code>querySelectorAll('.carte[data-bonne-reponse]')</code> dans <code>verifierReponses()</code> sélectionne uniquement les cartes qui ont cet attribut défini.",
+    answer: true,
+    expl: `Vrai. Le sélecteur CSS <code>[attribut]</code> cible les éléments qui <em>possèdent</em> cet attribut (peu importe sa valeur). Cela exclut automatiquement les autres <code>.carte</code> sans réponse définie (comme la carte de lancement).`
+  },
+  {
+    cat: "js",
+    statement: "<code>window.location.reload()</code> dans <code>rejuerQCM()</code> recharge uniquement les données JavaScript sans recharger la page HTML.",
+    answer: false,
+    expl: `Faux. <code>window.location.reload()</code> effectue un <strong>rechargement complet de la page</strong>, comme F5 dans le navigateur. Toutes les variables JS sont réinitialisées, le DOM est rechargé depuis zéro.`
+  },
+  {
+    cat: "css",
+    statement: "L'animation <code>@keyframes float</code> déplace le <code>#combo-indicator</code> verticalement de 10 pixels vers le haut au milieu de son cycle.",
+    answer: true,
+    expl: `Vrai. <code>0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) }</code> : au milieu du cycle (50%), l'élément est décalé de <code>-10px</code> (vers le haut). L'animation dure 2s et se répète à l'infini.`
+  },
+  {
+    cat: "python",
+    statement: "La fonction <code>echapper_html()</code> protège aussi contre les injections SQL.",
+    answer: false,
+    expl: `Faux. Elle protège uniquement contre les injections <strong>XSS HTML</strong> en échappant les 5 caractères spéciaux HTML. Les injections SQL nécessitent d'autres techniques (requêtes préparées). Ce projet n'utilise pas de base de données.`
+  },
+  {
+    cat: "archi",
+    statement: "Le flux complet du projet est : <code>main.py</code> → <code>charger_donnees()</code> → <code>generation_page_html()</code> → écriture <code>index.html</code> → navigateur charge la page → JS s'initialise.",
+    answer: true,
+    expl: `Vrai. C'est exactement le flux décrit dans le rapport §2.2 et §2.3. Python génère le HTML statique, puis JavaScript prend le relais côté client pour l'interactivité.`
+  },
+  {
+    cat: "js",
+    statement: "L'événement <code>DOMContentLoaded</code> attend que toutes les images soient chargées avant de s'exécuter.",
+    answer: false,
+    expl: `Faux. <code>DOMContentLoaded</code> se déclenche quand le HTML est parsé, <strong>sans attendre les images, feuilles de style ou iframes</strong>. C'est l'événement <code>load</code> qui attend toutes les ressources — d'où l'intérêt de <code>DOMContentLoaded</code> pour une initialisation rapide.`
+  },
+  {
+    cat: "python",
+    statement: "<code>for i, d in enumerate(donnees)</code> est strictement équivalent à <code>for i in range(len(donnees)): d = donnees[i]</code>.",
+    answer: true,
+    expl: `Vrai fonctionnellement. Les deux boucles produisent le même résultat. La version <code>enumerate</code> est simplement plus <strong>pythonique</strong>, plus lisible et légèrement plus performante car elle évite l'appel à <code>len()</code> et l'indexation répétée.`
+  },
+  {
+    cat: "css",
+    statement: "Dans ce projet, la propriété <code>backdrop-filter: blur(10px)</code> est utilisée sur la barre de timer (<code>#barre-timer</code>) pour créer un effet verre dépoli.",
+    answer: true,
+    expl: `Vrai. <code>#barre-timer</code> a <code>background: rgba(44,62,80,.95)</code> et <code>backdrop-filter: blur(10px)</code>. Cela crée un flou gaussien derrière l'élément semi-transparent — l'effet <em>glassmorphism</em> / verre dépoli.`
+  },
+  {
+    cat: "python",
+    statement: "<code>from chargement_donnees import *</code> dans <code>main.py</code> importe uniquement les fonctions, pas les constantes comme <code>LARGEUR</code> ou la classe <code>C</code>.",
+    answer: false,
+    expl: `Faux. <code>import *</code> importe <strong>tous les noms publics</strong> du module : fonctions (<code>charger_donnees</code>, <code>haut</code>, etc.), constantes (<code>LARGEUR = 54</code>) ET la classe <code>C</code>. Seuls les noms commençant par <code>_</code> (privés) seraient exclus — aucun n'est privé ici.`
+  },
+  {
+    cat: "python",
+    statement: "La fonction <code>demander_questions()</code> est définie à l'intérieur de <code>charger_donnees()</code> et peut donc être appelée directement depuis <code>main.py</code>.",
+    answer: false,
+    expl: `Faux. <code>demander_questions()</code> est une <strong>fonction imbriquée</strong> — elle n'existe que dans la portée locale de <code>charger_donnees()</code> et est invisible depuis l'extérieur. Seule <code>charger_donnees()</code> peut l'appeler. C'est une technique d'encapsulation intentionnelle.`
+  },
+  {
+    cat: "python",
+    statement: "Dans <code>banniere_recap()</code>, le séparateur <code>sep()</code> est affiché après chaque question, y compris la dernière.",
+    answer: false,
+    expl: `Faux. Le code vérifie <code>if i &lt; len(questions)</code> avant d'appeler <code>sep()</code>. Le séparateur n'est donc affiché qu'<strong>entre</strong> les questions, jamais après la dernière — ce qui évite un tiret orphelin avant le <code>bas()</code> final.`
+  },
+  {
+    cat: "js",
+    statement: "La variable <code>comboActuel</code> déclarée globalement dans <code>script.js</code> est activement utilisée dans le calcul du combo affiché à la fin.",
+    answer: false,
+    expl: `Faux. <code>comboActuel</code> est déclaré global et remis à 0 dans <code>demarrerQCM()</code>, mais <strong>jamais incrémenté ni lu</strong> ailleurs. Ce sont <code>comboConsecutif</code> (local à <code>verifierReponses()</code>) et <code>maxCombo</code> qui font réellement le calcul. C'est une variable inutilisée — un artifact de développement.`
+  },
+  {
+    cat: "html",
+    statement: "Dans <code>creer_section()</code>, le <code>&lt;label&gt;</code> qui enveloppe chaque radio permet de cliquer sur le texte de la réponse pour cocher le radio associé.",
+    answer: true,
+    expl: `Vrai. Un <code>&lt;label&gt;</code> qui <em>contient</em> un <code>&lt;input&gt;</code> (sans <code>for</code>/<code>id</code>) lui est automatiquement associé. Cliquer n'importe où sur le label — texte ou espace — déclenche le clic sur le radio. Crucial pour l'ergonomie mobile : grande zone tactile.`
+  },
+  {
+    cat: "js",
+    statement: "Dans <code>verifierReponses()</code>, le <code>setTimeout</code> de 1500ms sert à éviter un bug de synchronisation avec le timer.",
+    answer: false,
+    expl: `Faux. Le <code>setTimeout</code> de 1500ms est une décision d'<strong>UX (expérience utilisateur)</strong> : il laisse le temps aux classes CSS <code>correct</code>/<code>incorrect</code> de s'afficher et d'être vues avant de passer à l'écran de fin. Il n'a aucun lien avec le timer, qui est déjà arrêté par <code>arreterTimer()</code> au début de <code>verifierReponses()</code>.`
+  },
+  {
+    cat: "python",
+    statement: "Le calcul <code>pad_g = pad_total // 2</code> et <code>pad_d = pad_total - pad_g</code> dans <code>ligne()</code> garantit que les deux paddings sont toujours égaux.",
+    answer: false,
+    expl: `Faux. Si <code>pad_total</code> est impair (ex : 5), <code>pad_g = 5 // 2 = 2</code> et <code>pad_d = 5 - 2 = 3</code>. Le pixel excédentaire va à droite. Les paddings sont égaux uniquement quand <code>pad_total</code> est pair. L'asymétrie est intentionnelle pour éviter tout débordement.`
+  },
+  {
+    cat: "css",
+    statement: "La propriété <code>position: sticky</code> sur <code>#barre-timer</code> fait que la barre de timer est toujours visible, même quand on fait défiler la page vers le bas.",
+    answer: true,
+    expl: `Vrai. <code>position: sticky; top: 0</code> colle l'élément en haut du viewport dès qu'il atteint cette position lors du scroll. L'utilisateur peut faire défiler toutes les questions sans perdre de vue le chronomètre — meilleure UX que <code>position: fixed</code> qui sortirait l'élément du flux.`
+  },
+  {
+    cat: "js",
+    statement: "Utiliser <code>innerHTML</code> pour injecter <code>d.reponseChoisie</code> dans le récap de fin est sécurisé car <code>echapper_html()</code> a déjà été appelée côté Python.",
+    answer: false,
+    expl: `Faux (risque potentiel). <code>echapper_html()</code> s'applique lors de la <strong>génération HTML par Python</strong> — elle protège les attributs <code>data-bonne-reponse</code> et les valeurs des radios. Mais dans <code>afficherEcranFin()</code>, <code>d.reponseChoisie</code> vient de <code>radioChecked.value</code> (lu depuis le DOM). Si une valeur radio contenait du HTML malicieux non-échappé, <code>innerHTML</code> l'interpréterait. En pratique, les valeurs sont les mêmes chaînes échappées, donc sûr ici.`
+  }
+];
+
+// ════════════════════════════════════════════════
+//  ÉTAT GLOBAL
+// ════════════════════════════════════════════════
+let fcIndex = 0;
+let globalScore = 0;
+let totalAnswered = 0;
+let totalItems = FC_DATA.length + QCM_DATA.length + FILL_DATA.reduce((s,f)=>s+f.blanks.length,0) + VF_DATA.length;
+
+// ════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('fc-badge').textContent = FC_DATA.length;
+  document.getElementById('qcm-badge').textContent = QCM_DATA.length;
+  document.getElementById('fill-badge').textContent = FILL_DATA.length;
+  document.getElementById('vf-badge').textContent = VF_DATA.length;
+
+  fcRender();
+  buildQCM();
+  buildFill();
+  buildVF();
+  updateProgress();
+});
+
+// ════════════════════════════════════════════════
+//  TABS
+// ════════════════════════════════════════════════
+function switchTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('section-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ════════════════════════════════════════════════
+//  FLASH CARDS
+// ════════════════════════════════════════════════
+const CAT_CLASSES = { python:'cat-python', js:'cat-js', html:'cat-html', css:'cat-css', archi:'cat-archi' };
+
+function fcRender() {
+  const card = FC_DATA[fcIndex];
+  const scene = document.getElementById('fc-scene');
+  scene.classList.remove('flipped');
+
+  // Remove all cat classes and re-add
+  const catEl = document.getElementById('fc-cat');
+  catEl.className = 'category-pill ' + (CAT_CLASSES[card.cat] || '');
+  catEl.textContent = card.catLabel;
+
+  document.getElementById('fc-tag').textContent = card.catLabel + ' — Question';
+  document.getElementById('fc-tag-b').textContent = 'Réponse';
+  document.getElementById('fc-q').innerHTML = card.q;
+  document.getElementById('fc-a').innerHTML = card.a;
+  document.getElementById('fc-counter').textContent = `${fcIndex + 1} / ${FC_DATA.length}`;
+  document.getElementById('fc-prev').disabled = fcIndex === 0;
+  document.getElementById('fc-next').disabled = fcIndex === FC_DATA.length - 1;
+}
+
+function fcFlip() {
+  document.getElementById('fc-scene').classList.toggle('flipped');
+}
+
+function fcMove(dir) {
+  const next = fcIndex + dir;
+  if (next >= 0 && next < FC_DATA.length) {
+    fcIndex = next;
+    fcRender();
+  }
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (document.getElementById('section-flashcards').classList.contains('active')) {
+    if (e.key === 'ArrowRight') fcMove(1);
+    if (e.key === 'ArrowLeft')  fcMove(-1);
+    if (e.key === ' ') { e.preventDefault(); fcFlip(); }
+  }
+});
+
+// ════════════════════════════════════════════════
+//  QCM BUILD
+// ════════════════════════════════════════════════
+function buildQCM() {
+  const container = document.getElementById('qcm-container');
+  const letters = ['A', 'B', 'C', 'D'];
+
+  QCM_DATA.forEach((q, qi) => {
+    const div = document.createElement('div');
+    div.className = 'qcm-card';
+    div.id = `qcm-${qi}`;
+
+    const catClass = CAT_CLASSES[q.cat] || '';
+    let optsHTML = q.opts.map((opt, oi) => `
+      <button class="qcm-option" onclick="qcmSelect(${qi}, ${oi})" id="qcm-opt-${qi}-${oi}">
+        <span class="opt-letter">${letters[oi]}</span>
+        <span>${opt}</span>
+      </button>`).join('');
+
+    div.innerHTML = `
+      <span class="category-pill ${catClass}" style="margin-bottom:12px;display:inline-block">${q.cat.toUpperCase()}</span>
+      <div class="qcm-question">${q.q}</div>
+      <div class="qcm-options">${optsHTML}</div>
+      <div class="qcm-actions">
+        <button class="btn-check" id="qcm-check-${qi}" onclick="qcmCheck(${qi})" disabled>Vérifier</button>
+        <button class="btn-reset-qcm" onclick="qcmReset(${qi})">↺</button>
+      </div>
+      <div class="qcm-feedback" id="qcm-fb-${qi}"></div>`;
+
+    container.appendChild(div);
+  });
+}
+
+let qcmSelected = {};
+let qcmDone = {};
+
+function qcmSelect(qi, oi) {
+  if (qcmDone[qi]) return;
+  qcmSelected[qi] = oi;
+  // Update UI
+  QCM_DATA[qi].opts.forEach((_, idx) => {
+    const el = document.getElementById(`qcm-opt-${qi}-${idx}`);
+    el.classList.toggle('selected', idx === oi);
+  });
+  document.getElementById(`qcm-check-${qi}`).disabled = false;
+}
+
+function qcmCheck(qi) {
+  if (qcmDone[qi]) return;
+  qcmDone[qi] = true;
+  const q = QCM_DATA[qi];
+  const chosen = qcmSelected[qi];
+  const correct = q.correct;
+
+  q.opts.forEach((_, idx) => {
+    const el = document.getElementById(`qcm-opt-${qi}-${idx}`);
+    el.disabled = true;
+    if (idx === correct) el.classList.add('correct');
+    else if (idx === chosen && idx !== correct) el.classList.add('wrong');
+  });
+
+  const fb = document.getElementById(`qcm-fb-${qi}`);
+  const isCorrect = chosen === correct;
+  fb.className = 'qcm-feedback show ' + (isCorrect ? 'ok' : 'ko');
+  fb.innerHTML = isCorrect
+    ? `✅ <strong>Correct !</strong> ${q.expl}`
+    : `❌ <strong>Incorrect.</strong> ${q.expl}`;
+
+  document.getElementById(`qcm-check-${qi}`).disabled = true;
+  if (isCorrect) addScore(1);
+  updateProgress();
+}
+
+function qcmReset(qi) {
+  delete qcmDone[qi];
+  delete qcmSelected[qi];
+  QCM_DATA[qi].opts.forEach((_, idx) => {
+    const el = document.getElementById(`qcm-opt-${qi}-${idx}`);
+    el.className = 'qcm-option';
+    el.disabled = false;
+    el.onclick = () => qcmSelect(qi, idx);
+  });
+  const fb = document.getElementById(`qcm-fb-${qi}`);
+  fb.className = 'qcm-feedback';
+  fb.innerHTML = '';
+  document.getElementById(`qcm-check-${qi}`).disabled = true;
+}
+
+// ════════════════════════════════════════════════
+//  FILL IN THE BLANK BUILD
+// ════════════════════════════════════════════════
+function buildFill() {
+  const container = document.getElementById('fill-container');
+
+  FILL_DATA.forEach((f, fi) => {
+    const div = document.createElement('div');
+    div.className = 'fill-card';
+    div.id = `fill-${fi}`;
+    const catClass = CAT_CLASSES[f.cat] || '';
+
+    // Replace ___N___ with input fields
+    let stmtHTML = f.statement;
+    f.blanks.forEach((_, bi) => {
+      stmtHTML = stmtHTML.replace(
+        `___${bi+1}___`,
+        `<span class="blank-word" contenteditable="true" id="fill-${fi}-${bi}" 
+          data-answer="${f.answers[bi]}"
+          title="Indice : ${f.hints[bi]}"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();fillCheck(${fi})}"
+          ></span>`
+      );
+    });
+
+    div.innerHTML = `
+      <span class="category-pill ${catClass}" style="margin-bottom:10px;display:inline-block">${f.cat.toUpperCase()}</span>
+      <div class="fill-context">${f.context}</div>
+      <div class="fill-statement">${stmtHTML}</div>
+      <div class="qcm-actions">
+        <button class="btn-check" onclick="fillCheck(${fi})">Vérifier</button>
+        <button class="btn-reset-qcm" onclick="fillReset(${fi})">↺</button>
+      </div>
+      <div class="fill-result" id="fill-res-${fi}"></div>`;
+
+    container.appendChild(div);
+  });
+}
+
+let fillDone = {};
+
+function fillCheck(fi) {
+  if (fillDone[fi]) return;
+  const f = FILL_DATA[fi];
+  let allCorrect = true;
+  let details = [];
+
+  f.blanks.forEach((_, bi) => {
+    const input = document.getElementById(`fill-${fi}-${bi}`);
+    const typed = input.textContent.trim().replace(/^["']|["']$/g,'');
+    const expected = f.answers[bi].replace(/^["']|["']$/g,'');
+    const ok = typed.toLowerCase() === expected.toLowerCase();
+    if (!ok) allCorrect = false;
+
+    input.classList.remove('correct-blank','wrong-blank');
+    input.classList.add(ok ? 'correct-blank' : 'wrong-blank');
+    input.contentEditable = false;
+    if (!ok) details.push(`Blanc ${bi+1} : attendu <code>${f.answers[bi]}</code>, saisi <code>${typed || '(vide)'}</code>`);
+  });
+
+  fillDone[fi] = true;
+  const res = document.getElementById(`fill-res-${fi}`);
+  res.className = 'fill-result show ' + (allCorrect ? 'ok' : 'ko');
+  res.innerHTML = allCorrect
+    ? `✅ <strong>Parfait !</strong> Tous les blancs sont corrects.`
+    : `❌ <strong>Erreur.</strong> ${details.join(' | ')}`;
+
+  if (allCorrect) addScore(f.blanks.length);
+  updateProgress();
+}
+
+function fillReset(fi) {
+  delete fillDone[fi];
+  const f = FILL_DATA[fi];
+  f.blanks.forEach((_, bi) => {
+    const input = document.getElementById(`fill-${fi}-${bi}`);
+    input.textContent = '';
+    input.className = 'blank-word';
+    input.contentEditable = true;
+  });
+  const res = document.getElementById(`fill-res-${fi}`);
+  res.className = 'fill-result';
+  res.innerHTML = '';
+}
+
+// ════════════════════════════════════════════════
+//  VRAI / FAUX BUILD
+// ════════════════════════════════════════════════
+function buildVF() {
+  const container = document.getElementById('vf-container');
+
+  VF_DATA.forEach((item, vi) => {
+    const div = document.createElement('div');
+    div.className = 'vf-card';
+    div.id = `vf-${vi}`;
+    const catClass = CAT_CLASSES[item.cat] || '';
+
+    div.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="category-pill ${catClass}">${item.cat.toUpperCase()}</span>
+      </div>
+      <div class="vf-statement">${item.statement}</div>
+      <div class="vf-btns">
+        <button class="vf-btn" data-val="true"  onclick="vfAnswer(${vi}, true)"  id="vf-t-${vi}">VRAI</button>
+        <button class="vf-btn" data-val="false" onclick="vfAnswer(${vi}, false)" id="vf-f-${vi}">FAUX</button>
+      </div>
+      <div class="vf-expl" id="vf-expl-${vi}">${item.expl}</div>`;
+
+    container.appendChild(div);
+  });
+}
+
+let vfDone = {};
+
+function vfAnswer(vi, val) {
+  if (vfDone[vi]) return;
+  vfDone[vi] = true;
+  const item = VF_DATA[vi];
+  const correct = val === item.answer;
+
+  const tBtn = document.getElementById(`vf-t-${vi}`);
+  const fBtn = document.getElementById(`vf-f-${vi}`);
+  tBtn.disabled = true; fBtn.disabled = true;
+
+  // Style the chosen button
+  const chosenBtn = val ? tBtn : fBtn;
+  const otherBtn  = val ? fBtn : tBtn;
+  chosenBtn.classList.add(correct ? 'correct' : 'wrong');
+  // Always show correct answer
+  if (!correct) (item.answer ? tBtn : fBtn).classList.add('correct');
+
+  document.getElementById(`vf-expl-${vi}`).classList.add('show');
+  if (correct) addScore(1);
+  updateProgress();
+}
+
+// ════════════════════════════════════════════════
+//  SCORE & PROGRESS
+// ════════════════════════════════════════════════
+function addScore(n) {
+  globalScore += n;
+  document.getElementById('global-score').textContent = globalScore;
+}
+
+function updateProgress() {
+  const answered = Object.keys(qcmDone).length + Object.keys(fillDone).length + Object.keys(vfDone).length;
+  const total = QCM_DATA.length + FILL_DATA.length + VF_DATA.length;
+  const pct = total > 0 ? Math.round(answered / total * 100) : 0;
+  document.getElementById('progress-label').textContent = `${answered} / ${total}`;
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+// ════════════════════════════════════════════════
+//  RESET ALL
+// ════════════════════════════════════════════════
+function resetAll() {
+  if (!confirm('Réinitialiser tous les exercices ?')) return;
+  globalScore = 0;
+  document.getElementById('global-score').textContent = 0;
+
+  // Reset QCM
+  qcmSelected = {}; qcmDone = {};
+  QCM_DATA.forEach((_, qi) => qcmReset(qi));
+
+  // Reset Fill
+  fillDone = {};
+  FILL_DATA.forEach((_, fi) => fillReset(fi));
+
+  // Reset VF
+  vfDone = {};
+  VF_DATA.forEach((_, vi) => {
+    const t = document.getElementById(`vf-t-${vi}`);
+    const f = document.getElementById(`vf-f-${vi}`);
+    const e = document.getElementById(`vf-expl-${vi}`);
+    [t,f].forEach(b => { b.disabled = false; b.className = 'vf-btn'; });
+    e.classList.remove('show');
+  });
+
+  // Reset FC
+  fcIndex = 0; fcRender();
+  updateProgress();
+}
+</script>
+</body>
+</html>
